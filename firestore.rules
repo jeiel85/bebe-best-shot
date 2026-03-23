@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+    function isValidUser(data) {
+      return data.uid is string &&
+             data.email is string &&
+             (!('displayName' in data) || data.displayName is string) &&
+             (!('photoURL' in data) || data.photoURL is string) &&
+             (!('lastNotificationDate' in data) || data.lastNotificationDate is string);
+    }
+
+    function isValidPhoto(data) {
+      return data.userId == request.auth.uid &&
+             data.url is string &&
+             data.url.size() < 2048 &&
+             data.status in ['candidate', 'selected', 'rejected'] &&
+             (!('selectionDate' in data) || data.selectionDate is string) &&
+             (!('createdAt' in data) || data.createdAt is string) &&
+             (!('isTournamentWinner' in data) || data.isTournamentWinner is bool) &&
+             (!('printStatus' in data) || data.printStatus in ['none', 'pending', 'ordered']);
+    }
+
+    function isValidTournament(data) {
+      return data.userId == request.auth.uid &&
+             data.winnerPhotoId is string &&
+             data.winnerPhotoUrl is string &&
+             data.completedAt is string &&
+             (!('type' in data) || data.type in ['normal', 'king_of_kings']);
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidUser(request.resource.data);
+    }
+
+    match /photos/{photoId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidPhoto(request.resource.data);
+      allow update: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid) && isValidPhoto(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /tournaments/{tournamentId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidTournament(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

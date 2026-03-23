@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "App user profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "lastNotificationDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Photo": {
+      "title": "Photo",
+      "description": "A photo uploaded by the user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "url": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["candidate", "selected", "rejected"] },
+        "selectionDate": { "type": "string", "format": "date-time" },
+        "isTournamentWinner": { "type": "boolean" },
+        "printStatus": { "type": "string", "enum": ["none", "pending", "ordered"] }
+      },
+      "required": ["userId", "url", "createdAt", "status"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "A completed tournament record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "winnerPhotoId": { "type": "string" },
+        "winnerPhotoUrl": { "type": "string" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["normal", "king_of_kings"] }
+      },
+      "required": ["userId", "winnerPhotoId", "completedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/photos/{photoId}": {
+      "schema": "Photo",
+      "description": "User photos"
+    },
+    "/tournaments/{tournamentId}": {
+      "schema": "Tournament",
+      "description": "Completed tournaments"
+    }
+  }
+}
