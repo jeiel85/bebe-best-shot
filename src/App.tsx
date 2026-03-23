@@ -42,10 +42,13 @@ import {
   Bell,
   History,
   Clock,
-  Archive
+  Archive,
+  RefreshCw
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { Capacitor } from '@capacitor/core';
+import { Camera as CapCamera } from '@capacitor/camera';
 
 import { auth, db } from './firebase';
 import { Photo, View, Tournament, UserProfile } from './types';
@@ -540,14 +543,41 @@ const HomeView = ({
     }
   }, []);
 
-  // Native Gallery Access (Capacitor Logic - Placeholder for local build)
-  // This will be used when you build the app locally as a native app.
+  // Native Gallery Access (Capacitor Logic)
   const handleNativeGalleryAccess = async () => {
-    // Note: In a real Capacitor environment, you would use:
-    // import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-    // const images = await Camera.pickImages({ quality: 90, limit: 0 });
-    // This part should be implemented in your local environment after export.
-    console.log("Native gallery access triggered. This works in a native build.");
+    if (!Capacitor.isNativePlatform()) {
+      console.log("Not a native platform. Using web fallback.");
+      return;
+    }
+
+    try {
+      const images = await CapCamera.pickImages({
+        quality: 90,
+        limit: 0, // 0 means no limit
+      });
+
+      if (images.photos.length === 0) return;
+
+      const newPhotos: LocalPhoto[] = await Promise.all(images.photos.map(async (photo, index) => {
+        // In native, we might not have the actual File object easily, 
+        // but we have the webPath which we can use for display.
+        const id = Math.random().toString(36).substr(2, 9);
+        const localPhoto = {
+          id,
+          url: photo.webPath,
+          // We mock the File object for compatibility with existing logic if needed,
+          // though for display url is enough.
+          file: new File([], `native_${index}.jpg`), 
+          createdAt: new Date().toISOString() // Native pickImages doesn't provide original date easily
+        };
+        await savePhotoToDB(localPhoto);
+        return localPhoto;
+      }));
+
+      setLocalPhotos([...newPhotos, ...localPhotos].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    } catch (err) {
+      console.error("Native gallery access failed", err);
+    }
   };
 
   const handlePhotoAccess = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -600,16 +630,29 @@ const HomeView = ({
         {localPhotos.length > 0 && (
           <div className="flex items-center gap-2">
             <div className="relative">
-              <input 
-                type="file" 
-                accept="image/*" 
-                multiple 
-                onChange={handlePhotoAccess}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-              />
-              <Button variant="ghost" size="sm" className="p-2">
-                <Plus className="w-5 h-5" />
-              </Button>
+              {Capacitor.isNativePlatform() ? (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="p-2"
+                  onClick={handleNativeGalleryAccess}
+                >
+                  <Plus className="w-5 h-5" />
+                </Button>
+              ) : (
+                <>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    multiple 
+                    onChange={handlePhotoAccess}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  />
+                  <Button variant="ghost" size="sm" className="p-2">
+                    <Plus className="w-5 h-5" />
+                  </Button>
+                </>
+              )}
             </div>
             <Button variant="ghost" size="sm" onClick={handleClear} className="p-2 text-rose-500">
               <Trash2 className="w-5 h-5" />
@@ -621,13 +664,20 @@ const HomeView = ({
       {/* Gallery Grid */}
       {localPhotos.length === 0 ? (
         <div className="flex-1 relative">
-          <input 
-            type="file" 
-            accept="image/*" 
-            multiple 
-            onChange={handlePhotoAccess}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-          />
+          {Capacitor.isNativePlatform() ? (
+            <div 
+              onClick={handleNativeGalleryAccess}
+              className="absolute inset-0 cursor-pointer z-10"
+            />
+          ) : (
+            <input 
+              type="file" 
+              accept="image/*" 
+              multiple 
+              onChange={handlePhotoAccess}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            />
+          )}
           <div className="absolute inset-0 flex flex-col items-center justify-center p-12 text-center space-y-6">
             <div className="w-32 h-32 bg-indigo-50 rounded-full flex items-center justify-center">
               <ImageIcon className="w-16 h-16 text-indigo-200" />
@@ -635,7 +685,11 @@ const HomeView = ({
             <div className="space-y-2">
               <h3 className="text-xl font-bold text-gray-900">갤러리가 비어있습니다</h3>
               <p className="text-gray-500 text-sm">화면을 아무데나 탭하여<br />내 폰의 사진을 바로 불러오세요.</p>
-              <p className="text-[10px] text-indigo-400 mt-4">로컬 네이티브 빌드 시 권한 승인 후 자동 로드됩니다.</p>
+              {Capacitor.isNativePlatform() && (
+                <p className="text-[10px] text-indigo-600 font-bold mt-4 animate-pulse">
+                  네이티브 갤러리 권한을 요청합니다.
+                </p>
+              )}
             </div>
           </div>
         </div>
